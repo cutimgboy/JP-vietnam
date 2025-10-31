@@ -1,34 +1,62 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
-import { PostsService } from './posts.service';
+import { PostsService, PostsRo } from './posts.service';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Put,
+  Query,
+} from '@nestjs/common';
 import { CreatePostDto } from './dto/create-post.dto';
-import { UpdatePostDto } from './dto/update-post.dto';
 
-@Controller('posts')
+@Controller('post')
 export class PostsController {
   constructor(private readonly postsService: PostsService) {}
 
-  @Post()
-  create(@Body() createPostDto: CreatePostDto) {
-    return this.postsService.create(createPostDto);
+  /**
+   * 创建文章
+   * @param post
+   */
+  @Post('/create')
+  async create(@Body() post: CreatePostDto) {
+    return await this.postsService.create(post);
   }
 
-  @Get()
-  findAll() {
-    return this.postsService.findAll();
+  /**
+   * 获取所有文章
+   */
+  @Get('/findAll')
+  async findAll(@Query() query): Promise<PostsRo> {
+    return await this.postsService.findAll(query);
   }
 
+  /**
+   * 获取指定文章
+   * @param id
+   */
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.postsService.findOne(+id);
+  async findById(@Param('id') id) {
+    return await this.postsService.findById(id);
   }
 
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updatePostDto: UpdatePostDto) {
-    return this.postsService.update(+id, updatePostDto);
+  /**
+   * 更新文章
+   * @param id
+   * @param post
+   */
+  @Put(':id')
+  async update(@Param('id') id, @Body() post) {
+    return await this.postsService.updateById(id, post);
   }
 
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.postsService.remove(+id);
+  /**
+   * 删除
+   * @param id
+   */
+  @Delete('id')
+  async remove(@Param('id') id) {
+    return await this.postsService.remove(id);
   }
 }

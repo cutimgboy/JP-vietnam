@@ -6,6 +6,9 @@ import { AppService } from './app.service';
 import { PostsModule } from './posts/posts.module';
 import envConfig from '../config/env';
 
+// 数据实体
+import { PostsEntity } from './posts/entities/posts.entity';
+
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -17,7 +20,7 @@ import envConfig from '../config/env';
       inject: [ConfigService],
       useFactory: async (configService: ConfigService) => ({
         type: 'mysql', // 数据库类型
-        entities: [], // 数据表实体，synchronize为true时，自动创建表，生产环境建议关闭
+        entities: [PostsEntity], // 数据表实体，synchronize为true时，自动创建表，生产环境建议关闭
         host: configService.get('DB_HOST'), // 主机，默认为localhost
         port: configService.get<number>('DB_PORT'), // 端口号
         username: configService.get('DB_USER'), // 用户名

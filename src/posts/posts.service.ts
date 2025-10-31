@@ -1,26 +1,72 @@
-import { Injectable } from '@nestjs/common';
-import { CreatePostDto } from './dto/create-post.dto';
-import { UpdatePostDto } from './dto/update-post.dto';
+import { HttpException, Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { getRepository, Repository } from 'typeorm';
+import { PostsEntity } from './entities/posts.entity';
 
+export interface PostsRo {
+  list: PostsEntity[];
+  count: number;
+  totalPages: number;
+  currentPage: number;
+}
 @Injectable()
 export class PostsService {
-  create(createPostDto: CreatePostDto) {
-    return 'This action adds a new post';
+  constructor(
+    @InjectRepository(PostsEntity)
+    private readonly postsRepository: Repository<PostsEntity>,
+  ) {}
+
+  // 创建文章
+  async create(post: Partial<PostsEntity>): Promise<PostsEntity> {
+    const { title } = post;
+    if (!title) {
+      throw new HttpException('缺少文章标题', 401);
+    }
+    const doc = await this.postsRepository.findOne({ where: { title } });
+    if (doc) {
+      throw new HttpException('文章已存在', 401);
+    }
+    return await this.postsRepository.save(post);
   }
 
-  findAll() {
-    return `This action returns all posts`;
+
+  // 获取文章列表
+  async findAll(page: number = 1, pageSize: number = 10): Promise<PostsRo> {
+    const [posts, totalCount] = await this.postsRepository.findAndCount({
+      skip: (page - 1) * pageSize, // 分页偏移量
+      take: pageSize, // 每页显示的记录数
+      order: { create_time: 'DESC' },
+    });
+
+    return {
+      list: posts,
+      count: totalCount,
+      totalPages: Math.ceil(totalCount / pageSize), // 计算总页数
+      currentPage: page, // 当前页
+    };
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} post`;
+  // 获取指定文章
+  async findById(id): Promise<PostsEntity | null> {
+    return await this.postsRepository.findOne({ where: { id } });
   }
 
-  update(id: number, updatePostDto: UpdatePostDto) {
-    return `This action updates a #${id} post`;
+  // 更新文章
+  async updateById(id, post): Promise<PostsEntity> {
+    const existPost = await this.postsRepository.findOne({ where: { id } });
+    if (!existPost) {
+      throw new HttpException(`id为${id}的文章不存在`, 401);
+    }
+    const updatePost = this.postsRepository.merge(existPost, post);
+    return this.postsRepository.save(updatePost);
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} post`;
+  // 刪除文章
+  async remove(id) {
+    const existPost = await this.postsRepository.findOne({ where: { id } });
+    if (!existPost) {
+      throw new HttpException(`id为${id}的文章不存在`, 401);
+    }
+    return await this.postsRepository.remove(existPost);
   }
 }
