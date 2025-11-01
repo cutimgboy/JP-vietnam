@@ -34,9 +34,6 @@ import { PostsEntity } from './posts/entities/posts.entity';
   ],
   controllers: [AppController],
   // 注册为全局守卫
-  providers: [
-    AppService,
-  ],
+  providers: [AppService],
 })
-
 export class AppModule {}

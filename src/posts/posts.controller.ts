@@ -9,8 +9,10 @@ import {
   Put,
   Query,
 } from '@nestjs/common';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CreatePostDto } from './dto/create-post.dto';
 
+@ApiTags('文章')
 @Controller('post')
 export class PostsController {
   constructor(private readonly postsService: PostsService) {}
@@ -19,6 +21,7 @@ export class PostsController {
    * 创建文章
    * @param post
    */
+  @ApiOperation({ summary: '创建文章' })
   @Post('/create')
   async create(@Body() post: CreatePostDto) {
     return await this.postsService.create(post);
