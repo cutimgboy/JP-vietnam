@@ -19,7 +19,7 @@ export class SmsService {
    * 发送短信验证码
    * @param phone 手机号
    */
-  async sendSms(phone: string): Promise<void> {
+  async sendSms(phone: string): Promise<string> {
     // 检查是否频繁发送
     const cacheKey = `sms:${phone}`;
     const existingCode = await this.cacheManager.get(cacheKey);
@@ -40,6 +40,7 @@ export class SmsService {
 
     // 将验证码存入缓存，有效期5分钟
     await this.cacheManager.set(cacheKey, code, 300000);
+    return code;
   }
 
   /**

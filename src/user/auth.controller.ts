@@ -24,9 +24,10 @@ export class AuthController {
   @ApiOperation({ summary: '发送短信验证码' })
   @ApiResponse({ status: 200, description: '发送成功' })
   async sendSms(@Body() sendSmsDto: SendSmsDto) {
-    await this.smsService.sendSms(sendSmsDto.phone);
+    const code = await this.smsService.sendSms(sendSmsDto.phone);
     return {
       message: '验证码已发送',
+      code: code
     };
   }
 
