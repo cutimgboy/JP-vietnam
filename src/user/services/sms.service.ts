@@ -1,12 +1,9 @@
-import { Injectable, Inject, BadRequestException } from '@nestjs/common';
-import { CACHE_MANAGER } from '@nestjs/cache-manager';
-import type { Cache } from 'cache-manager';
+import { Injectable, BadRequestException } from '@nestjs/common';
+import { RedisService } from '../../redis/redis.service';
 
 @Injectable()
 export class SmsService {
-  constructor(
-    @Inject(CACHE_MANAGER) private cacheManager: Cache,
-  ) {}
+  constructor(private redisService: RedisService) {}
 
   /**
    * 生成6位随机验证码
@@ -22,7 +19,7 @@ export class SmsService {
   async sendSms(phone: string): Promise<string> {
     // 检查是否频繁发送
     const cacheKey = `sms:${phone}`;
-    const existingCode = await this.cacheManager.get(cacheKey);
+    const existingCode = await this.redisService.get(cacheKey);
 
     if (existingCode) {
       throw new BadRequestException('验证码已发送，请稍后再试');
@@ -38,8 +35,8 @@ export class SmsService {
     // TODO: 调用真实短信API
     // await this.sendSmsToProvider(phone, code);
 
-    // 将验证码存入缓存，有效期5分钟
-    await this.cacheManager.set(cacheKey, code, 300000);
+    // 将验证码存入缓存，有效期5分钟（300秒）
+    await this.redisService.set(cacheKey, code, 300);
     return code;
   }
 
@@ -50,7 +47,7 @@ export class SmsService {
    */
   async verifySms(phone: string, code: string): Promise<boolean> {
     const cacheKey = `sms:${phone}`;
-    const cachedCode = await this.cacheManager.get<string>(cacheKey);
+    const cachedCode = await this.redisService.get(cacheKey);
 
     if (!cachedCode) {
       throw new BadRequestException('验证码已过期或不存在');
@@ -61,7 +58,7 @@ export class SmsService {
     }
 
     // 验证成功后删除验证码
-    await this.cacheManager.del(cacheKey);
+    await this.redisService.del(cacheKey);
     return true;
   }
 

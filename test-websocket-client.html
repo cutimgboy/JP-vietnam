@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket 行情测试客户端</title>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 2px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .connected { background-color: #d4edda; color: #155724; }
+        .disconnected { background-color: #f8d7da; color: #721c24; }
+        .input-group {
+            margin: 20px 0;
+        }
+        input {
+            padding: 10px;
+            width: 300px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 0 5px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .btn-primary {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .btn-danger {
+            background-color: #f44336;
+            color: white;
+        }
+        .btn-info {
+            background-color: #2196F3;
+            color: white;
+        }
+        button:hover {
+            opacity: 0.8;
+        }
+        .log-area {
+            background-color: #1e1e1e;
+            color: #00ff00;
+            padding: 15px;
+            border-radius: 5px;
+            height: 400px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            margin-top: 20px;
+        }
+        .log-item {
+            margin: 5px 0;
+            padding: 5px;
+            border-left: 3px solid #00ff00;
+            padding-left: 10px;
+        }
+        .log-error {
+            border-left-color: #ff0000;
+            color: #ff6666;
+        }
+        .log-info {
+            border-left-color: #00aaff;
+            color: #66ccff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 WebSocket 实时行情测试客户端</h1>
+        
+        <div id="status" class="status disconnected">
+            连接状态: 未连接
+        </div>
+
+        <div class="input-group">
+            <input 
+                type="text" 
+                id="symbolInput" 
+                placeholder="请输入股票代码，如 700.HK, AAPL.US"
+                value="700.HK"
+            />
+            <button class="btn-primary" onclick="subscribe()">?? 订阅</button>
+            <button class="btn-danger" onclick="unsubscribe()">❌ 取消订阅</button>
+            <button class="btn-info" onclick="getStatus()">📡 获取状态</button>
+            <button class="btn-info" onclick="clearLogs()">🗑️ 清空日志</button>
+        </div>
+
+        <div>
+            <strong>已订阅股票：</strong>
+            <span id="subscribedList">无</span>
+        </div>
+
+        <div class="log-area" id="logArea"></div>
+    </div>
+
+    <script>
+        let socket = null;
+        let subscribedSymbols = new Set();
+
+        // 连接到 WebSocket 服务
+        function connect() {
+            addLog('正在连接到 WebSocket 服务器...', 'info');
+            
+            socket = io('http://localhost:3000/quote', {
+                transports: ['websocket'],
+            });
+
+            // 连接成功
+            socket.on('connect', () => {
+                addLog('✅ WebSocket 连接成功！', 'success');
+                updateStatus(true);
+            });
+
+            // 连接状态
+            socket.on('connection-status', (data) => {
+                addLog(`📡 连接状态: ${JSON.stringify(data)}`, 'info');
+            });
+
+            // 订阅成功
+            socket.on('subscribe-success', (data) => {
+                addLog(`✅ 订阅成功: ${data.message}`, 'success');
+                data.symbols.forEach(s => subscribedSymbols.add(s));
+                updateSubscribedList();
+            });
+
+            // 取消订阅成功
+            socket.on('unsubscribe-success', (data) => {
+                addLog(`✅ 取消订阅成功: ${data.message}`, 'success');
+                data.symbols.forEach(s => subscribedSymbols.delete(s));
+                updateSubscribedList();
+            });
+
+            // 接收实时行情数据
+            socket.on('quote-data', (data) => {
+                addLog(`📊 行情数据: ${JSON.stringify(data)}`, 'data');
+            });
+
+            // 状态信息
+            socket.on('status-info', (data) => {
+                addLog(`📡 状态信息: ${JSON.stringify(data, null, 2)}`, 'info');
+            });
+
+            // 错误
+            socket.on('error', (data) => {
+                addLog(`❌ 错误: ${JSON.stringify(data)}`, 'error');
+            });
+
+            // 断开连接
+            socket.on('disconnect', () => {
+                addLog('❌ WebSocket 连接断开', 'error');
+                updateStatus(false);
+            });
+        }
+
+        // 订阅股票
+        function subscribe() {
+            const symbol = document.getElementById('symbolInput').value.trim();
+            if (!symbol) {
+                alert('请输入股票代码');
+                return;
+            }
+
+            const symbols = symbol.split(',').map(s => s.trim());
+            
+            socket.emit('subscribe', {
+                symbols: symbols,
+                depthLevel: 5,
+            });
+
+            addLog(`🔔 发送订阅请求: ${symbols.join(', ')}`, 'info');
+        }
+
+        // 取消订阅
+        function unsubscribe() {
+            const symbol = document.getElementById('symbolInput').value.trim();
+            if (!symbol) {
+                alert('请输入股票代码');
+                return;
+            }
+
+            const symbols = symbol.split(',').map(s => s.trim());
+            
+            socket.emit('unsubscribe', {
+                symbols: symbols,
+            });
+
+            addLog(`🔕 发送取消订阅请求: ${symbols.join(', ')}`, 'info');
+        }
+
+        // 获取状态
+        function getStatus() {
+            socket.emit('get-status');
+        }
+
+        // 添加日志
+        function addLog(message, type = 'normal') {
+            const logArea = document.getElementById('logArea');
+            const time = new Date().toLocaleTimeString();
+            const logItem = document.createElement('div');
+            logItem.className = `log-item ${type === 'error' ? 'log-error' : type === 'info' ? 'log-info' : ''}`;
+            logItem.textContent = `[${time}] ${message}`;
+            logArea.appendChild(logItem);
+            logArea.scrollTop = logArea.scrollHeight;
+        }
+
+        // 更新连接状态
+        function updateStatus(connected) {
+            const statusDiv = document.getElementById('status');
+            if (connected) {
+                statusDiv.className = 'status connected';
+                statusDiv.textContent = '连接状态: 已连接 ✅';
+            } else {
+                statusDiv.className = 'status disconnected';
+                statusDiv.textContent = '连接状态: 未连接 ❌';
+            }
+        }
+
+        // 更新已订阅列表
+        function updateSubscribedList() {
+            const listSpan = document.getElementById('subscribedList');
+            if (subscribedSymbols.size === 0) {
+                listSpan.textContent = '无';
+            } else {
+                listSpan.textContent = Array.from(subscribedSymbols).join(', ');
+            }
+        }
+
+        // 清空日志
+        function clearLogs() {
+            document.getElementById('logArea').innerHTML = '';
+            addLog('📝 日志已清空', 'info');
+        }
+
+        // 页面加载时自动连接
+        window.onload = function() {
+            connect();
+        };
+    </script>
+</body>
+</html>
