@@ -18,6 +18,8 @@ import { UserEntity } from './user/entities/user.entity';
 import { TradingSettingsEntity } from './cfd/entities/trading-settings.entity';
 import { StockInfoEntity } from './cfd/entities/stock-info.entity';
 import { CryptoInfoEntity } from './cfd/entities/crypto-info.entity';
+import { StockRealtimePriceEntity } from './quote/entities/stock-realtime-price.entity';
+import { StockPriceChangeEntity } from './quote/entities/stock-price-change.entity';
 
 @Module({
   imports: [
@@ -30,7 +32,7 @@ import { CryptoInfoEntity } from './cfd/entities/crypto-info.entity';
       inject: [ConfigService],
       useFactory: async (configService: ConfigService) => ({
         type: 'mysql', // 数据库类型
-        entities: [PostsEntity, UserEntity, TradingSettingsEntity, StockInfoEntity, CryptoInfoEntity], // 数据表实体，synchronize为true时，自动创建表，生产环境建议关闭
+        entities: [PostsEntity, UserEntity, TradingSettingsEntity, StockInfoEntity, CryptoInfoEntity, StockRealtimePriceEntity, StockPriceChangeEntity], // 数据表实体，synchronize为true时，自动创建表，生产环境建议关闭
         host: configService.get('DB_HOST'), // 主机，默认为localhost
         port: configService.get<number>('DB_PORT'), // 端口号
         username: configService.get('DB_USER'), // 用户名

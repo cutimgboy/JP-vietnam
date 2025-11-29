@@ -1,559 +1,187 @@
-# WebSocket 实时行情 API 文档
+# 股票实时行情API文档
 
-## 📡 连接信息
+## 概述
 
-### WebSocket 服务地址
+本文档描述了股票实时行情系统的API接口，提供实时的股票买卖价格信息。系统通过WebSocket接收实时行情数据，经过价格变化检测和价差计算后，通过HTTP API提供给前端使用。
 
-```
-ws://localhost:3000/quote
-```
+## 基础信息
 
-**协议：** Socket.IO  
-**命名空间：** `/quote`  
-**认证要求：** 无（已关闭全局认证）
+- **Base URL**: `http://localhost:3000/api/quote`
+- **数据格式**: JSON
+- **字符编码**: UTF-8
+- **支持股票**: NVDA.US, MSFT.US, AAPL.US, AMZN.US, GOOG.US
 
----
+## API接口
 
-## 🔌 客户端集成
+### 1. 获取所有股票实时行情
 
-### 1. 安装依赖
+**接口地址**: `GET /api/quote/realtime`
 
-```bash
-npm install socket.io-client
-```
+**描述**: 获取所有目标股票的实时买卖价格信息
 
-### 2. 基础连接示例
+**请求参数**: 无
 
-```typescript
-import { io } from 'socket.io-client';
-
-// 连接到 WebSocket 服务
-const socket = io('http://localhost:3000/quote', {
-  transports: ['websocket'],
-});
-
-// 监听连接成功
-socket.on('connect', () => {
-  console.log('✅ 已连接到行情服务');
-});
-
-// 监听断开连接
-socket.on('disconnect', () => {
-  console.log('❌ 已断开连接');
-});
-```
-
----
-
-## 📨 消息协议
-
-### 客户端发送消息
-
-#### 1. 订阅股票行情
-
-**事件名：** `subscribe`
-
-**参数格式：**
-```typescript
-{
-  symbols: string[];      // 股票代码列表，如 ['700.HK', 'AAPL.US']
-  depthLevel?: number;    // 深度档位 (1-5)，默认 5
-}
-```
-
-**代码示例：**
-```typescript
-socket.emit('subscribe', {
-  symbols: ['700.HK', 'AAPL.US'],
-  depthLevel: 5,
-});
-```
-
-#### 2. 取消订阅
-
-**事件名：** `unsubscribe`
-
-**参数格式：**
-```typescript
-{
-  symbols: string[];  // 要取消订阅的股票代码列表
-}
-```
-
-**代码示例：**
-```typescript
-socket.emit('unsubscribe', {
-  symbols: ['700.HK'],
-});
-```
-
-#### 3. 获取连接状态
-
-**事件名：** `get-status`
-
-**参数：** 无
-
-**代码示例：**
-```typescript
-socket.emit('get-status');
-```
-
----
-
-### 服务端推送消息
-
-#### 1. 连接状态通知
-
-**事件名：** `connection-status`
-
-**数据格式：**
-```typescript
-{
-  status: 'connected';
-  message: '连接成功';
-  timestamp: string;  // ISO 8601 格式时间
-}
-```
-
-**监听示例：**
-```typescript
-socket.on('connection-status', (data) => {
-  console.log('连接状态:', data);
-});
-```
-
-#### 2. 订阅成功通知
-
-**事件名：** `subscribe-success`
-
-**数据格式：**
-```typescript
-{
-  message: string;      // 如 "成功订阅 2 个股票"
-  symbols: string[];    // 已订阅的股票列表
-}
-```
-
-**监听示例：**
-```typescript
-socket.on('subscribe-success', (data) => {
-  console.log('订阅成功:', data.symbols);
-});
-```
-
-#### 3. 取消订阅成功通知
-
-**事件名：** `unsubscribe-success`
-
-**数据格式：**
-```typescript
-{
-  message: string;
-  symbols: string[];
-}
-```
-
-#### 4. 实时行情数据
-
-**事件名：** `quote-data`
-
-**数据格式：** 来自 alltick.co 的原始行情数据
-
-**监听示例：**
-```typescript
-socket.on('quote-data', (data) => {
-  console.log('收到行情数据:', data);
-  // 根据 cmd_id 判断消息类型
-  // 根据 data.code 获取股票代码
-  // 更新 UI 展示
-});
-```
-
-**行情数据示例：**
+**响应示例**:
 ```json
 {
-  "cmd_id": 22002,
-  "seq_id": 123,
-  "data": {
-    "code": "AAPL.US",
-    "price": 150.25,
-    "volume": 1000,
-    "bid": [
-      { "price": 150.24, "volume": 100 },
-      { "price": 150.23, "volume": 200 }
-    ],
-    "ask": [
-      { "price": 150.25, "volume": 150 },
-      { "price": 150.26, "volume": 250 }
-    ]
-  }
-}
-```
-
-#### 5. 状态信息
-
-**事件名：** `status-info`
-
-**数据格式：**
-```typescript
-{
-  connectionStatus: 'OPEN' | 'CONNECTING' | 'CLOSING' | 'CLOSED';
-  subscribedSymbols: string[];  // 当前已订阅的所有股票
-  timestamp: string;
-}
-```
-
-#### 6. 错误信息
-
-**事件名：** `error`
-
-**数据格式：**
-```typescript
-{
-  message: string;  // 错误描述
-}
-```
-
----
-
-## 🎯 完整使用流程
-
-### 前端完整示例
-
-```typescript
-import { io, Socket } from 'socket.io-client';
-
-class QuoteClient {
-  private socket: Socket;
-  private subscribedSymbols: Set<string> = new Set();
-
-  constructor() {
-    this.socket = io('http://localhost:3000/quote', {
-      transports: ['websocket'],
-    });
-    
-    this.setupListeners();
-  }
-
-  private setupListeners() {
-    // 连接成功
-    this.socket.on('connect', () => {
-      console.log('✅ 连接成功');
-      this.updateConnectionStatus('已连接');
-    });
-
-    // 连接断开
-    this.socket.on('disconnect', () => {
-      console.log('❌ 连接断开');
-      this.updateConnectionStatus('未连接');
-    });
-
-    // 连接状态
-    this.socket.on('connection-status', (data) => {
-      console.log('连接状态:', data);
-    });
-
-    // 订阅成功
-    this.socket.on('subscribe-success', (data) => {
-      console.log('订阅成功:', data);
-      data.symbols.forEach(s => this.subscribedSymbols.add(s));
-      this.updateUI();
-    });
-
-    // 取消订阅成功
-    this.socket.on('unsubscribe-success', (data) => {
-      console.log('取消订阅:', data);
-      data.symbols.forEach(s => this.subscribedSymbols.delete(s));
-      this.updateUI();
-    });
-
-    // 实时行情数据
-    this.socket.on('quote-data', (data) => {
-      this.handleQuoteData(data);
-    });
-
-    // 状态信息
-    this.socket.on('status-info', (data) => {
-      console.log('状态信息:', data);
-    });
-
-    // 错误
-    this.socket.on('error', (data) => {
-      console.error('错误:', data);
-      alert(data.message);
-    });
-  }
-
-  // 订阅股票
-  subscribe(symbols: string[]) {
-    if (symbols.length === 0) {
-      alert('请输入股票代码');
-      return;
+  "codeList": [
+    {
+      "code": "NVDA.US",
+      "buy_price": 145.87,
+      "sale_price": 145.47
+    },
+    {
+      "code": "MSFT.US", 
+      "buy_price": 378.15,
+      "sale_price": 377.85
+    },
+    {
+      "code": "AAPL.US",
+      "buy_price": 178.32,
+      "sale_price": 178.02
+    },
+    {
+      "code": "AMZN.US",
+      "buy_price": 145.63,
+      "sale_price": 145.13
+    },
+    {
+      "code": "GOOG.US",
+      "buy_price": 139.84,
+      "sale_price": 139.54
     }
-
-    this.socket.emit('subscribe', {
-      symbols,
-      depthLevel: 5,
-    });
-  }
-
-  // 取消订阅
-  unsubscribe(symbols: string[]) {
-    if (symbols.length === 0) {
-      alert('请输入要取消订阅的股票代码');
-      return;
-    }
-
-    this.socket.emit('unsubscribe', { symbols });
-  }
-
-  // 获取状态
-  getStatus() {
-    this.socket.emit('get-status');
-  }
-
-  // 处理行情数据
-  private handleQuoteData(data: any) {
-    console.log('收到行情:', data);
-    // 更新 UI，如更新价格、K线图等
-  }
-
-  // 更新连接状态 UI
-  private updateConnectionStatus(status: string) {
-    // 更新页面上的连接状态显示
-  }
-
-  // 更新 UI
-  private updateUI() {
-    // 更新已订阅股票列表展示
-  }
-
-  // 断开连接
-  disconnect() {
-    this.socket.disconnect();
-  }
-}
-
-// 使用
-const quoteClient = new QuoteClient();
-
-// 订阅
-quoteClient.subscribe(['700.HK', 'AAPL.US']);
-
-// 取消订阅
-quoteClient.unsubscribe(['700.HK']);
-
-// 获取状态
-quoteClient.getStatus();
-```
-
----
-
-## 🧪 测试方法
-
-### 方法 1：使用提供的 HTML 测试页面
-
-```bash
-# 在浏览器中打开
-open test-websocket-client.html
-```
-
-页面功能：
-- ✅ 实时连接状态显示
-- ✅ 订阅/取消订阅操作
-- ✅ 实时日志显示
-- ✅ 已订阅股票列表
-
-### 方法 2：使用 Node.js 脚本测试
-
-```javascript
-const io = require('socket.io-client');
-
-const socket = io('http://localhost:3000/quote');
-
-socket.on('connect', () => {
-  console.log('✅ 已连接');
-  
-  // 订阅
-  socket.emit('subscribe', {
-    symbols: ['700.HK', 'AAPL.US'],
-    depthLevel: 5,
-  });
-});
-
-socket.on('quote-data', (data) => {
-  console.log('📊 行情:', data);
-});
-```
-
-### 方法 3：使用在线工具
-
-访问：https://amritb.github.io/socketio-client-tool/
-
-- **Server URL:** `http://localhost:3000/quote`
-- **Event Name:** `subscribe`
-- **Message:** `{"symbols":["700.HK"],"depthLevel":5}`
-
----
-
-## 📋 股票代码格式
-
-| 市场 | 格式 | 示例 |
-|-----|------|------|
-| 香港股市 | `代码.HK` | `700.HK`（腾讯控股）|
-| 美国股市 | `代码.US` | `AAPL.US`（苹果）|
-| A股上海 | `代码.SH` | `600000.SH`（浦发银行）|
-| A股深圳 | `代码.SZ` | `000001.SZ`（平安银行）|
-
----
-
-## ⚠️ 注意事项
-
-1. **Token 配置**
-   - 默认使用 `testtoken`（测试用）
-   - 生产环境需在 `.env.prod` 中配置真实 Token
-   - Token 申请：https://alltick.co
-
-2. **API 地址选择**
-   - **当前使用**：股票 API (`quote-stock-b-ws-api`)
-   - 如需外汇/加密货币，修改 `QuoteService` 中的 URL
-
-3. **连接管理**
-   - 自动重连：断开后 5 秒自动重连
-   - 心跳保活：每 30 秒发送心跳
-   - 订阅恢复：重连后自动恢复订阅
-
-4. **性能考虑**
-   - 建议限制订阅数量（如最多 50 个）
-   - 高频数据可考虑节流处理
-   - 可将行情数据缓存到 Redis
-
----
-
-## 🔗 相关资源
-
-- **alltick.co GitHub**：https://github.com/alltick/realtime-forex-crypto-stock-tick-finance-websocket-api
-- **Token 申请**：https://alltick.co
-- **NestJS WebSocket 文档**：https://docs.nestjs.com/websockets/gateways
-- **Socket.IO 文档**：https://socket.io/docs/v4/
-
----
-
-## 🎨 前端 UI 建议
-
-### 搜索框 + 实时行情展示
-
-```
-┌─────────────────────────────────────┐
-│ 🔍 请输入代码或名称                 │
-│ [______________] [订阅] [取消]      │
-└─────────────────────────────────────┘
-
-已订阅股票：
-┌─────────────────────────────────────┐
-│ 700.HK  腾讯控股  HK$ 350.20  ↑    │
-│ AAPL.US 苹果     $ 150.25    ↓    │
-└─────────────────────────────────────┘
-```
-
-### 推荐流程
-
-1. 用户在搜索框输入代码或名称
-2. 调用 `/cfd/search` API 搜索产品
-3. 展示搜索结果列表
-4. 用户点击某个产品
-5. 通过 WebSocket 订阅该产品的实时行情
-6. 跳转到行情详情页，实时展示价格变动
-
----
-
-## 💡 实战示例
-
-### 完整的行情订阅流程
-
-```typescript
-import { io } from 'socket.io-client';
-
-class QuoteManager {
-  private socket: Socket;
-
-  constructor() {
-    this.socket = io('http://localhost:3000/quote');
-    this.setupListeners();
-  }
-
-  private setupListeners() {
-    // 实时行情数据处理
-    this.socket.on('quote-data', (data) => {
-      if (data.cmd_id === 22002) {
-        // 深度行情数据
-        this.updateDepthQuote(data.data);
-      }
-    });
-  }
-
-  // 订阅股票
-  subscribeStock(code: string) {
-    this.socket.emit('subscribe', {
-      symbols: [code],
-      depthLevel: 5,
-    });
-  }
-
-  // 更新深度行情
-  private updateDepthQuote(data: any) {
-    const { code, price, bid, ask, volume } = data;
-    
-    // 更新价格显示
-    document.querySelector(`#price-${code}`).textContent = price;
-    
-    // 更新买盘/卖盘
-    this.updateOrderBook('bid', bid);
-    this.updateOrderBook('ask', ask);
-  }
-
-  private updateOrderBook(type: 'bid' | 'ask', orders: any[]) {
-    // 更新买盘或卖盘的 UI
-    orders.forEach((order, index) => {
-      console.log(`${type}[${index}]: ${order.price} @ ${order.volume}`);
-    });
-  }
+  ],
+  "updated_at": "2024-01-01T10:30:00.123Z"
 }
 ```
 
----
+**响应字段说明**:
+- `codeList`: 股票行情列表
+  - `code`: 股票代码
+  - `buy_price`: 买入价格（实时价格 + 买入价差）
+  - `sale_price`: 卖出价格（实时价格 - 卖出价差）
+- `updated_at`: 数据更新时间
 
-## 🎊 功能特性
+### 2. 获取单个股票实时行情
 
-| 特性 | 说明 |
-|-----|------|
-| ✅ 实时推送 | 行情数据实时推送，延迟低 |
-| ✅ 自动重连 | 断线后自动重连，无需手动处理 |
-| ✅ 心跳保活 | 自动发送心跳，维持连接 |
-| ✅ 订阅管理 | 支持动态订阅/取消订阅 |
-| ✅ 状态查询 | 可查询连接状态和订阅列表 |
-| ✅ 广播模式 | 所有客户端共享行情数据 |
-| ✅ 错误处理 | 完善的错误处理和日志记录 |
+**接口地址**: `GET /api/quote/realtime/{code}`
 
----
+**描述**: 获取指定股票的实时买卖价格信息
 
-## 🚀 下一步扩展
+**路径参数**:
+- `code`: 股票代码（如: NVDA.US）
 
-1. **数据持久化**
-   - 将行情数据存储到 Redis（实时数据）
-   - 将历史数据存储到 MySQL（用于回测）
+**响应示例**:
+```json
+{
+  "code": "NVDA.US",
+  "buy_price": 145.87,
+  "sale_price": 145.47
+}
+```
 
-2. **权限控制**
-   - 添加客户端认证
-   - 限制订阅数量
-   - 实现订阅权限管理
+**错误响应**:
+```json
+{
+  "statusCode": 400,
+  "message": "股票代码不能为空"
+}
+```
 
-3. **性能优化**
-   - 数据压缩
-   - 限流控制
-   - 分组推送（按订阅分组）
+### 3. 获取WebSocket连接状态
 
-4. **功能增强**
-   - 支持历史数据查询
-   - 支持K线数据推送
-   - 支持多种时间周期
+**接口地址**: `GET /api/quote/status/connection`
+
+**描述**: 获取WebSocket连接状态和订阅信息
+
+**响应示例**:
+```json
+{
+  "connectionStatus": "OPEN",
+  "subscribedSymbols": ["NVDA.US", "MSFT.US", "AAPL.US", "AMZN.US", "GOOG.US"],
+  "timestamp": "2024-01-01T10:30:00.123Z"
+}
+```
+
+**响应字段说明**:
+- `connectionStatus`: 连接状态（CONNECTING, OPEN, CLOSING, CLOSED）
+- `subscribedSymbols`: 已订阅的股票列表
+- `timestamp`: 响应时间戳
+
+## 数据流程
+
+### WebSocket数据接收
+1. 系统连接到外部行情数据源（alltick.co）
+2. 订阅指定的5只美股实时行情
+3. 每秒接收Tick数据推送
+
+### 价格变化检测
+1. 比较新价格与Redis缓存中的价格
+2. 只有价格变化超过阈值（0.0001）才触发处理
+3. 过滤重复数据，避免无效处理
+
+### 价差计算
+1. 从trading_settings表获取价差设置
+2. 买入价 = 实时价格 + spread字段
+3. 卖出价 = 实时价格 - askSpread字段
+
+### 缓存更新
+1. 更新Redis中的股票行情缓存
+2. 更新所有股票汇总缓存
+3. 异步保存价格变动记录到数据库
+
+## 性能特性
+
+- **响应时间**: < 50ms
+- **数据更新频率**: 实时（价格变化时）
+- **缓存策略**: Redis多级缓存
+- **并发支持**: 支持高并发访问
+
+## 错误处理
+
+### HTTP状态码
+- `200`: 成功
+- `400`: 请求参数错误
+- `500`: 服务器内部错误
+
+### 常见错误信息
+- `股票代码不能为空`: 请求参数中缺少股票代码
+- `获取实时行情数据失败`: Redis连接或查询失败
+- `获取连接状态失败`: WebSocket状态查询失败
+
+## 使用建议
+
+### 前端集成
+1. 使用轮询方式调用 `/api/quote/realtime` 接口
+2. 建议轮询间隔为1秒
+3. 处理网络异常和重连逻辑
+
+### 数据缓存
+1. 前端可以缓存响应数据，但建议不超过2秒
+2. 使用 `updated_at` 字段判断数据新鲜度
+3. 优先使用最新数据，避免显示过期信息
+
+### 错误处理
+1. 监控API响应时间
+2. 实现重试机制
+3. 提供降级方案（显示最后有效数据）
+
+## 监控指标
+
+### 业务指标
+- WebSocket连接状态
+- 价格更新频率
+- API响应时间
+- 缓存命中率
+
+### 技术指标
+- Redis内存使用
+- 数据库连接池状态
+- 错误率统计
+- 并发请求数
+
+## 版本信息
+
+- **当前版本**: v1.0.0
+- **更新日期**: 2024-01-01
+- **兼容性**: 向后兼容
